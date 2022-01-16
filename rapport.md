@@ -10,12 +10,12 @@ La société Pressoare a subi une attaque informatique : l'intégrité des donn�
 
 A l'aide de la commande *strings trace.pcap*, on repère rapidement du contenu anormal dans la trace réseau par exemple *chmod* ou bien */bin/sh*. Wireshark permet alors d'approfondir ces pistes :
 
-![attaque](/images/reseau_1.png)
+![attaque](images/reseau_1.png)
 *hexdump d'une des attaques*
 
 On voit alors clairement les étapes suivi dans une de ses attaques. Il utilise tout d'abord la commande *ECHO %x% x%x%x %x* qui correspond à une attque "Format String" visant à afficher le haut de la pile. Le fait que cela ait abouti dans la trace réseau montre qu'il y a une première vulnérabilité dans le code qu'il faut approfondir (cf ci-dessous). Ensuite, l'attaquant utilise une payload qui lui permet d'obtenir un shell, d'où une deuxième vulnérabilité. L'attaquant liste ensuite
 
-![attaque2](/images/reseau_2.png)
+![attaque2](images/reseau_2.png)
 *Suite de l'attaque précédente*
 
 
@@ -24,7 +24,7 @@ On voit alors clairement les étapes suivi dans une de ses attaques. Il utilise 
 
 Grâce à la trace réseau, nous avons donc pu récupérer la payload utilisée par l’attaquant.
 
-![payload_hexdump](/images/payload_hexdump.png)
+![payload_hexdump](images/payload_hexdump.png)
 *hexdump de la payload utilisée par l’attaquant*
 
 * La payload commence par 64 octets de valeur "90", ce qui correspond au *toboggan de NOP*. L’attaquant souhaite que le fil d’exécution du programme du serveur arrive dans ce toboggan afin de sauter de NOP en NOP jusqu’au code permettant d’obtenir le shell.
@@ -36,7 +36,7 @@ Grâce à la trace réseau, nous avons donc pu récupérer la payload utilisée 
 
 Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on désassemble le code permettant de l’obtenir.
 
-![code_assembleur](/images/extrait_assembleur.png)
+![code_assembleur](images/extrait_assembleur.png)
 *extrait du code assembleur permettant d’obtenir le shell*
 
 * On commence par les instructions classiques jump/call/pop qui permettent d’écrire l’adresse de la chaîne de caractères "/bin/sh" dans le registre ebp (cette adresse sera utiliée par la suite au moment de l’appel système execve).
@@ -54,12 +54,12 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 Après avoir récupéré une adresse de la stack grâce à la faille n°1 *format string*, l’attaquant a utilisé une deuxième faille dans le code C afin de pouvoir réaliser un buffer overflow.
 
 Afin d’éviter justement les buffer overflows, les développeurs ont choisi de créer une fonction *sanitizeBuffer* qui permet de copier l’entrée utilisateur contenue dans *unsafeBuffer* dans un buffer limité à 200 caractères *safeBuffer* et en stoppant la copie au premier au premier caractère non-imprimable trouvé. Cependant, les développeurs se sont trompés dans l’écriture de leur code ce qui permet a permis à l’attaquant d’écrire plus de 200 caractères.
-En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retour à la ligne "\n", alors le code C va réaliser les actions suivantes :
-* remplacement du "\n" (0a en hexadécimal) par "\0"
+En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retour à la ligne "\\n", alors le code C va réaliser les actions suivantes :
+* remplacement du "\\n" (0a en hexadécimal) par "\0"
 * calcul de strlen(unsafeBuffer), ici le résultat de ce calcul donne 200
-* copie caractère par caractère de *unsafeBuffer* dans *safeBuffer* de l’indice 0 à l’indice 201 ! (cf capture d’écran ci-dessous) Un caractère de trop a donc été copié et donc l’attaquant peut déborder de *safeBuffer*. Ce caractère copié en trop est forcément un 0 (car le 201ième caractère est un "\n" qui a été remplacé précédemment par un "\0" et est copié dans la mémoire après *safeBuffer*.
+* copie caractère par caractère de *unsafeBuffer* dans *safeBuffer* de l’indice 0 à l’indice 201 ! (cf capture d’écran ci-dessous) Un caractère de trop a donc été copié et donc l’attaquant peut déborder de *safeBuffer*. Ce caractère copié en trop est forcément un 0 (car le 201ième caractère est un "\\n" qui a été remplacé précédemment par un "\0" et est copié dans la mémoire après *safeBuffer*.
 
-![faille_sanitizeBuffer](/images/faille_sanitizeBuffer.png)
+![faille_sanitizeBuffer](images/faille_sanitizeBuffer.png)
 *extrait du code C de la fonction incriminée sanitizeBuffer*
 
 La question est donc à présent de savoir exactement où ce 0 *en trop* a été copié. Avec gdb, en utilisant notamment la commande : *print &variable*, on peut reconstituer l’état de la stack au moment du déroulement de cette boucle for. On obtient alors le résultat suivant :
@@ -101,7 +101,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
 Voici ce que donne le lancement de ce code sur la machine Analyste :
 
-![attaque_reussie](/images/attaque_reussie.png)
+![attaque_reussie](images/attaque_reussie.png)
 *reproduction de l'attaque*
 
 # Conclusion
