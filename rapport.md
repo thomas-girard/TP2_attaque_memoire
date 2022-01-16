@@ -26,7 +26,11 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 ![code_assembleur](/images/extrait_assembleur.png)
 *extrait du code assembleur permettant d’obtenir le shell*
 
-* On commenc
+* On commence par les instructions classiques jump/call/pop qui permettent d’écrire l’adresse de la chaîne de caractères */bin/sh* dans le registre ebp (cette adresse sera utiliée par la suite au moment de l’appel système execve).
+* On a ensuite une remise à 0 d’une partie des registres.
+* On remarque ensuite un appel à *mmap2*, sûrement pour se réserver un segment en mémoire avec des permissions particulières.
+* On a ensuite ce qui semble être un boucle for avec un appel système à *getppeername* afin probablement d’attacher le shell à la socket utilisée par l’attaquant.
+* Enfin, on trouve bien l’appel système à *execve* avec la chaîne de caractère "/bin/sh" en paramètre afin de lancer le shell.
 
 
 # Faille n° 1
