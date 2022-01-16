@@ -48,7 +48,12 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 
 # Faille n° 1 : format string
 
-Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en c. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant rajoute "%x" après le "Echo", le serveur va l'interpréter comme un argument et renvoyer le haut de la pile.
+Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en C. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant choisit la string "%x%x%x%x %x", *snprintf()* va aller chercher 5 arguments (qui en réalité n’existent pas) à l’emplacement où ils devraient être c’est-à-dire au dessus du cadre de pile de la fonction DoEcho. Cela a ici pour conséquence de renvoyer notamment la variable *echo* dont la valeur a définie de la manière suivante : 
+```C
+echo = msg->safeBuffer+msg->debut;
+```
+
+Par conséquent, echo pointe vers safeBuffer + 5 octets (début est égal à 5 puisque "ECHO " fait 5 caractères). Ainsi, l’attaquant récupère, à 5 octets près, l’adresse du buffer *safeBuffer*.
 
 ![Fonction DoEcho](images/do_echo.png)
 *Fonction DoEcho*
@@ -86,12 +91,15 @@ On remarque donc que c’est l’octet de poids faible de i qui va être écras�
 
 Ensuite, c’est l’octet de valeur *8b* qui est écrit à la place de l’octet de poids faible de *\*dst*. Cette modification est tout sauf anodine. En effet, *\*dst* correspond à l’adresse en mémoire où la payload est recopiée (à cet instant, on peut d’ailleurs noter que la valeur de *\*dst* est égale à son adresse). Ainsi, en modifiant *\*dst*, l’attaquant peut choisir d’écrire là où il le souhaite dans la mémoire.\
 Il serait pertinent pour lui d’écrire à l’adresse de retour de la fonction sanitizeBuffer. En effet, en remplaçant cette adresse par une adresse dans le toboggan de NOP, cela lui permettrait de déplacer le fil d’exécution du serveur vers le code lui permettant d’obtenir un shell.\
-Pour cela, l’attaquant doit connaître l’adresse de l’adresse de retour de la fonction sanitizeBuffer. Bien sûr, à cause de l’ASLR, cette adresse change à chaque nouvelle exécution donc l’attaquant a besoin d’un point de repère. Pour cela, il va utiliser l’adresse retournée par la commande ECHO vue à la partie précédente sur l’attaque format string. Pour rappel, cette adresse correspond à l’adresse de sanitizeBuffer + 5. De plus, en ayant une bonne connaissance de la stack, l’attaquant sait que l’adresse de retour de sanitizeBuffer se situe 247 octets après cette adresse, il doit donc remplacer *\*dst* par l’adresse retournée par ECHO + 247. Cependant, l’attaquant n’a accès qu’à l’octet de poids faible de *\*dst*, il doit donc espérer que le deuxième octet de *\*dst* ait été incrémenté "naturellement" au cours de la recopie. C’est pour cette raison que l’attaque ne fonctionne pas à tous les coups et que sur la trace réseau on a deux attaques : la première a échoué avant que la seconde ne réuissise. On obtient donc le schéma suivant pour l’attaque : 
+Pour cela, l’attaquant doit connaître l’adresse de l’adresse de retour de la fonction sanitizeBuffer. Bien sûr, à cause de l’ASLR, cette adresse change à chaque nouvelle exécution donc l’attaquant a besoin d’un point de repère. Pour cela, il va utiliser l’adresse retournée par la commande ECHO vue à la partie précédente sur l’attaque format string. Pour rappel, cette adresse correspond à l’adresse de sanitizeBuffer + 5. De plus, en ayant une bonne connaissance de la stack, l’attaquant sait que l’adresse de retour de sanitizeBuffer se situe 247 octets après cette adresse, il doit donc remplacer *\*dst* par l’adresse retournée par ECHO + 247. Cependant, l’attaquant n’a accès qu’à l’octet de poids faible de *\*dst*, il doit donc espérer que le deuxième octet de *\*dst* ait été incrémenté "naturellement" au cours de la recopie. C’est pour cette raison que l’attaque ne fonctionne pas à tous les coups et que sur la trace réseau on a deux attaques : la première a échoué avant que la seconde ne réussisse. On obtient donc le schéma suivant pour l’attaque : 
+![buffer_illustration_attaque](images/buffer_illustration_2.jpg)
 
+L’attaquant écrase donc l’adresse de retour de la fonction sanitizeBuffer avec l’adresse renvoyée par ECHO diminuée de 4 octets. Cette soustraction de 4 octets est facultative car de toute manière, en écrivant exactement l’adresse renvoyée par ECHO il serait tombé dans le toboggan de NOP tout de même. En retirant 4 octets, l’attaquant se place exactement au début du toboggan de NOP (le premier NOP a été mis à 0 grâce à la variable *eos* car c’est le premier caractère non-imprimable détecté). 
 
 # Reproduction de l'attaque à l'aide d'un script
 
 Nous avons reproduit l'attaque à l'aide d'un script python qui nous a permis d'ouvrir un shell. Voici notre code :
+
 
 ```python
 #!/usr/bin/env python3
