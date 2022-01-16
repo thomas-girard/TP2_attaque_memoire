@@ -4,16 +4,16 @@
 
 # Introduction
 
-La société Pressoare a subi une attaque informatique : l'intégrité des données a été compromises, un déséquilibre financier a été repéré sur un des serveurs, et du trafic anormal a été détecté ! L'objectif de notre mission est de comprendre l'origine de l'attaque, la reproduire, identifier les vulnérabilités et émettre des recommendations.
+La société Pressoare a subi une attaque informatique : l'intégrité des données a été compromise, un déséquilibre financier a été repéré sur un des serveurs, et un trafic anormal a été détecté ! L'objectif de notre mission est de comprendre l'origine de l'attaque, la reproduire, identifier les vulnérabilités et émettre des recommendations.
 
-# Analyse Réseaux
+# Analyse réseau
 
 A l'aide de la commande *strings trace.pcap*, on repère rapidement du contenu anormal dans la trace réseau par exemple *chmod* ou bien */bin/sh*. Wireshark permet alors d'approfondir ces pistes :
 
 ![attaque](images/reseau_1.png)
-*hexdump d'une des attaques*
+*hexdump d'une des tentatives d’attaques*
 
-On voit alors clairement les étapes suivi dans une de ses attaques. Il utilise tout d'abord la commande *ECHO %x% x%x%x %x* qui correspond à une attque "Format String" visant à afficher le haut de la pile. Le fait que cela ait abouti dans la trace réseau montre qu'il y a une première vulnérabilité dans le code qu'il faut approfondir (cf ci-dessous). Ensuite, l'attaquant utilise une payload qui lui permet d'obtenir un shell, d'où une deuxième vulnérabilité. L'attaquant liste ensuite les fichiers du dossier data et écrit 100 000 dans l'un d'eux : l'attaquant a ainsi modifié des données financières. Savoir quel client correspond au fichier A99883 permettrait de savoir à qui profite l'attaque et potentiellement permettre de retrouver l'identité du malfaiteur.
+On voit alors clairement les étapes suivies dans une de ces attaques. Il utilise tout d'abord la commande *ECHO %x% x%x%x %x* qui correspond à une attaque "format string" (expliquée en détail ci-dessous). Le fait que cela ait abouti dans la trace réseau montre qu'il y a une première vulnérabilité dans le code qu'il faut approfondir (cf faille n°1 ci-dessous). Ensuite, l'attaquant utilise une payload qui lui permet d'obtenir un shell en utilisant une deuxième vulnérabilité. L'attaquant liste ensuite les fichiers du dossier data et écrit 100 000 dans l'un d'eux : l'attaquant a ainsi modifié des données financières. Savoir quel client est rattaché au fichier A99883 permettrait de savoir à qui profite l'attaque et potentiellement de retrouver l'identité du malfaiteur.
 
 ![attaque2](images/reseau_2.png)
 *Suite de l'attaque précédente*
@@ -42,18 +42,18 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 * On commence par les instructions classiques jump/call/pop qui permettent d’écrire l’adresse de la chaîne de caractères "/bin/sh" dans le registre ebp (cette adresse sera utiliée par la suite au moment de l’appel système execve).
 * On a ensuite une remise à 0 d’une partie des registres.
 * On remarque ensuite un appel à *mmap2*, sûrement pour se réserver un segment en mémoire avec des permissions particulières.
-* On a ensuite ce qui semble être un boucle for avec un appel système à *getppeername* afin probablement d’attacher le shell à la socket utilisée par l’attaquant.
+* On a ensuite ce qui semble être une boucle for avec un appel système à *getppeername* afin probablement d’attacher le shell à la socket utilisée par l’attaquant.
 * Enfin, on trouve bien l’appel système à *execve* avec la chaîne de caractère "/bin/sh" en paramètre afin de lancer le shell.
 
 
 # Faille n° 1 : format string
 
-Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en C. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant choisit la string "%x%x%x%x %x", *snprintf()* va aller chercher 5 arguments (qui en réalité n’existent pas) à l’emplacement où ils devraient être c’est-à-dire au dessus du cadre de pile de la fonction DoEcho. Cela a ici pour conséquence de renvoyer notamment la variable *echo* dont la valeur a définie de la manière suivante : 
-```C
+Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en C. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant choisit la string "%x%x%x%x %x", *snprintf()* va aller chercher 5 arguments (qui en réalité n’existent pas) à l’emplacement où ils devraient être c’est-à-dire au dessus du cadre de pile de la fonction DoEcho. Cela a ici pour conséquence de renvoyer notamment la variable *echo* dont la valeur a été définie de la manière suivante : 
+```c
 echo = msg->safeBuffer+msg->debut;
 ```
 
-Par conséquent, echo pointe vers safeBuffer + 5 octets (début est égal à 5 puisque "ECHO " fait 5 caractères). Ainsi, l’attaquant récupère, à 5 octets près, l’adresse du buffer *safeBuffer*.
+Par conséquent, echo pointe vers safeBuffer + 5 octets (*début* étant égal à 5 puisque "ECHO " fait 5 caractères). Ainsi, l’attaquant récupère, à 5 octets près, l’adresse du buffer *safeBuffer*.
 
 ![Fonction DoEcho](images/do_echo.png)
 *Fonction DoEcho*
