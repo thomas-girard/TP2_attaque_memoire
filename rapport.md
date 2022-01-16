@@ -71,6 +71,9 @@ En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retou
 
 La question est donc à présent de savoir exactement où ce 0 *en trop* a été copié. Avec gdb, en utilisant notamment la commande : *print &variable*, on peut reconstituer l’état de la stack au moment du déroulement de cette boucle for. On obtient alors le résultat suivant :
 
+![stack_sanitizeBuffer](images/buffer_illustration.jpg)
+*représentation de la stack lors de l’exécution de sanitizeBuffer*
+
 # Reproduction de l'attaque à l'aide d'un script
 
 Nous avons reproduit l'attaque à l'aide d'un script python qui nous a permis d'ouvrir un shell. Voici notre code :
