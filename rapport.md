@@ -10,7 +10,10 @@
 
 Grâce à la trace réseau, nous avons donc pu récupérer la payload utilisée par l’attaquant. 
 
-![payload_hedump](/images/payload_hexdump.png)
+![payload_hexdump](/images/payload_hexdump.png)
+
+* La payload commence par 64 octets de valeur "90", ce qui correspond au *toboggan de NOP*. L’attaquant souhaite que le fil d’exécution du programme du serveur arrive dans ce toboggan afin de sauter de NOP en NOP jusqu’au code permettant d’obtenir le shell.
+* 
 
 
 # Faille n° 1
