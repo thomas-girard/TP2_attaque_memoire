@@ -150,3 +150,4 @@ Voici des recommandations pour le client afin d'améliorer sa sécurité et d'é
 # Conclusion
 
 Finalement, nous avons réussi à comprendre les étapes utilisées par l'attaquant et les vulnérabilités qu'il a exploitées. Nous avons également pu reproduire l'attaque et émettre des recommandations pour qu'une telle attaque ne soit plus possible à l'avenir.
+Nous espérons que la société Pressoare se remettra de cette attaque informatique et qu’elle pourra reprendre son activité sereinement.
