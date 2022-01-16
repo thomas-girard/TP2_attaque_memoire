@@ -48,7 +48,12 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 
 # Faille n° 1 : format string
 
-Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en c. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant rajoute "%x" après le "Echo", le serveur va l'interpréter comme un argument et renvoyer le haut de la pile.
+Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en C. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant choisit la string "%x%x%x%x %x", *snprintf()* va aller chercher 5 arguments (qui en réalité n’existent pas) à l’emplacement où ils devraient être c’est-à-dire au dessus du cadre de pile de la fonction DoEcho. Cela a ici pour conséquence de renvoyer notamment la variable *echo* dont la valeur a définie de la manière suivante : 
+```C
+echo = msg->safeBuffer+msg->debut;
+```
+
+Par conséquent, echo pointe vers safeBuffer + 5 octets (début est égal à 5 puisque "ECHO " fait 5 caractères). Ainsi, l’attaquant récupère, à 5 octets près, l’adresse du buffer *safeBuffer*.
 
 ![Fonction DoEcho](images/do_echo.png)
 *Fonction DoEcho*
