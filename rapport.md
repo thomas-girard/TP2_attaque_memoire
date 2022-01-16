@@ -57,6 +57,7 @@ Cette attaque n'est pas détectée par le serveur, malgré fonction *SanitizeBuf
 
 
 # Faille n° 2 : buffer overflow
+## Une fonction qui copie un octet de trop...
 
 Après avoir récupéré une adresse de la stack grâce à la faille n°1 *format string*, l’attaquant a utilisé une deuxième faille dans le code C afin de pouvoir réaliser un buffer overflow.
 
@@ -73,6 +74,13 @@ La question est donc à présent de savoir exactement où ce 0 *en trop* a été
 
 ![stack_sanitizeBuffer](images/buffer_illustration.jpg)
 *représentation de la stack lors de l’exécution de sanitizeBuffer*
+
+On remarque donc que c’est l’octet de poids faible de i qui va être écrasé par la valeur 0. Or i est le compteur de boucle censé limiter à 200 le nombre de caractères copiés. L’écraser va donc permettre d’écrire au moins un caractère supplémentaire. Ce qui va permettre à l’attaquant de continuer d’écraser i et ainsi d’écrire autant d’octets qu’il le souhaite ! Ainsi, on comprend pourquoi l’octet n°201 de la payload est 0a : l’attaquant feint un retour à la ligne afin d’exploiter la faille. Il continue ensuite d’écrire : 00 00 00 pour écraser totalement i, 0d 00 00 00 qui va permettre de mettre len à la valeur 13 afin de continuer d’écrire la fin de la payload et surtout de s’arrêter lorsqu’elle aura entièrement été copiée.
+
+## Modification de l’adresse de retour de la fonction
+
+Ensuite, c’est l’octet de valeur *8b* qui est écrit à la place de l’octet de poids faible de **dst* 
+
 
 # Reproduction de l'attaque à l'aide d'un script
 
