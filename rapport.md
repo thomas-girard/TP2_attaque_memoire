@@ -58,7 +58,7 @@ Par conséquent, echo pointe vers safeBuffer + 5 octets (*début* étant égal �
 ![Fonction DoEcho](images/do_echo.png)
 *Fonction DoEcho*
 
-Cette attaque n'est pas détectée par le serveur, malgré fonction *SanitizeBuffer()* qui génère une alerte lorsque des caractères non imprimables sont détectées. En effet, "%" est bien un caractère imprimable et l'attaque n'est pas détectée.
+Cette attaque n'est pas détectée par le serveur, malgré fonction *SanitizeBuffer()* qui génère une alerte lorsque des caractères non imprimables sont détectés. En effet, "%" est bien un caractère imprimable c’est donc pour ça qu’une alerte n’est pas levée.
 
 
 # Faille n° 2 : buffer overflow
@@ -66,11 +66,11 @@ Cette attaque n'est pas détectée par le serveur, malgré fonction *SanitizeBuf
 
 Après avoir récupéré une adresse de la stack grâce à la faille n°1 *format string*, l’attaquant a utilisé une deuxième faille dans le code C afin de pouvoir réaliser un buffer overflow.
 
-Afin d’éviter justement les buffer overflows, les développeurs ont choisi de créer une fonction *sanitizeBuffer* qui permet de copier l’entrée utilisateur contenue dans *unsafeBuffer* dans un buffer limité à 200 caractères *safeBuffer* et en stoppant la copie au premier au premier caractère non-imprimable trouvé. Cependant, les développeurs se sont trompés dans l’écriture de leur code ce qui permet a permis à l’attaquant d’écrire plus de 200 caractères.
+Afin d’éviter justement les buffer overflows, les développeurs ont choisi de créer une fonction *sanitizeBuffer* qui permet de copier l’entrée utilisateur contenue dans *unsafeBuffer* dans un buffer limité à 200 caractères *safeBuffer*. Cependant, les développeurs ont réalisé une maladresse dans l’écriture de leur code ce qui a permis à l’attaquant d’écrire plus de 200 caractères.
 En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retour à la ligne "\\n", alors le code C va réaliser les actions suivantes :
-* remplacement du "\\n" (0a en hexadécimal) par "\0"
-* calcul de strlen(unsafeBuffer), ici le résultat de ce calcul donne 200
-* copie caractère par caractère de *unsafeBuffer* dans *safeBuffer* de l’indice 0 à l’indice 201 ! (cf capture d’écran ci-dessous) Un caractère de trop a donc été copié et donc l’attaquant peut déborder de *safeBuffer*. Ce caractère copié en trop est forcément un 0 (car le 201ième caractère est un "\\n" qui a été remplacé précédemment par un "\0" et est copié dans la mémoire après *safeBuffer*.
+* remplacement du "\\n" (0a en hexadécimal) par "\0".
+* calcul de strlen(unsafeBuffer), ici le résultat de ce calcul donne 200.
+* copie caractère par caractère de *unsafeBuffer* dans *safeBuffer* de l’indice 0 à l’indice 201 ! (cf capture d’écran ci-dessous) Un caractère de trop a donc été copié et l’attaquant peut ainsi déborder de *safeBuffer*. Ce caractère copié en trop est forcément un 0 (car le 201ième caractère est un "\\n" qui a été remplacé précédemment par un "\0" et qui est copié dans la mémoire après *safeBuffer*.
 
 ![faille_sanitizeBuffer](images/faille_sanitizeBuffer.png)
 *extrait du code C de la fonction incriminée sanitizeBuffer*
@@ -89,12 +89,12 @@ On remarque donc que c’est l’octet de poids faible de i qui va être écras�
 
 ## Modification de l’adresse de retour de la fonction
 
-Ensuite, c’est l’octet de valeur *8b* qui est écrit à la place de l’octet de poids faible de *\*dst*. Cette modification est tout sauf anodine. En effet, *\*dst* correspond à l’adresse en mémoire où la payload est recopiée (à cet instant, on peut d’ailleurs noter que la valeur de *\*dst* est égale à son adresse). Ainsi, en modifiant *\*dst*, l’attaquant peut choisir d’écrire là où il le souhaite dans la mémoire.\
-Il serait pertinent pour lui d’écrire à l’adresse de retour de la fonction sanitizeBuffer. En effet, en remplaçant cette adresse par une adresse dans le toboggan de NOP, cela lui permettrait de déplacer le fil d’exécution du serveur vers le code lui permettant d’obtenir un shell.\
+Ensuite, c’est l’octet de valeur *8b* qui est écrit à la place de l’octet de poids faible de *\*dst*. Cette modification est tout sauf anodine. En effet, *\*dst* correspond à l’adresse en mémoire où la payload est recopiée (à cet instant, on peut d’ailleurs noter que la valeur de *\*dst* est égale à son adresse). Ainsi, en modifiant *\*dst*, l’attaquant peut choisir d’écrire là où il le souhaite dans la mémoire.<br/><br/>
+Il serait pertinent pour lui d’écrire à l’adresse de retour de la fonction sanitizeBuffer. En effet, en remplaçant cette adresse par une adresse dans le toboggan de NOP, cela lui permettrait de déplacer le fil d’exécution du serveur vers le code lui permettant d’obtenir un shell.<br/><br/>
 Pour cela, l’attaquant doit connaître l’adresse de l’adresse de retour de la fonction sanitizeBuffer. Bien sûr, à cause de l’ASLR, cette adresse change à chaque nouvelle exécution donc l’attaquant a besoin d’un point de repère. Pour cela, il va utiliser l’adresse retournée par la commande ECHO vue à la partie précédente sur l’attaque format string. Pour rappel, cette adresse correspond à l’adresse de sanitizeBuffer + 5. De plus, en ayant une bonne connaissance de la stack, l’attaquant sait que l’adresse de retour de sanitizeBuffer se situe 247 octets après cette adresse, il doit donc remplacer *\*dst* par l’adresse retournée par ECHO + 247. Cependant, l’attaquant n’a accès qu’à l’octet de poids faible de *\*dst*, il doit donc espérer que le deuxième octet de *\*dst* ait été incrémenté "naturellement" au cours de la recopie. C’est pour cette raison que l’attaque ne fonctionne pas à tous les coups et que sur la trace réseau on a deux attaques : la première a échoué avant que la seconde ne réussisse. On obtient donc le schéma suivant pour l’attaque : 
 ![buffer_illustration_attaque](images/buffer_illustration_2.jpg)
 
-L’attaquant écrase donc l’adresse de retour de la fonction sanitizeBuffer avec l’adresse renvoyée par ECHO diminuée de 4 octets. Cette soustraction de 4 octets est facultative car de toute manière, en écrivant exactement l’adresse renvoyée par ECHO il serait tombé dans le toboggan de NOP tout de même. En retirant 4 octets, l’attaquant se place exactement au début du toboggan de NOP (le premier NOP a été mis à 0 grâce à la variable *eos* car c’est le premier caractère non-imprimable détecté). 
+En analysant la fin de la payload, on remarque que l’attaquant écrase l’adresse de retour de la fonction sanitizeBuffer avec l’adresse renvoyée par ECHO diminuée de 4 octets. Cette soustraction de 4 octets est facultative car de toute manière, en écrivant exactement l’adresse renvoyée par ECHO il serait quand même tombé dans le toboggan de NOP. En retirant 4 octets, l’attaquant se place exactement au début du toboggan de NOP (le premier NOP a été mis à 0 grâce à la variable *eos* car c’est le premier caractère non-imprimable détecté). 
 
 # Reproduction de l'attaque à l'aide d'un script
 
@@ -140,14 +140,16 @@ Voici ce que donne le lancement de ce code sur la machine Analyste :
 ![attaque_reussie](images/attaque_reussie.png)
 *reproduction de l'attaque*
 
+On obtient bien un listing des fichiers grâce à la commande *ls*, l’attaque a donc réussi !
+
 # Recommandations pour le client
 
 Voici des recommandations pour le client afin d'améliorer sa sécurité et d'éviter à l'avenir une attaque similaire:
-- Il faut  détecter "%" comme étant une tentative d'attaque "format string".
+- Il faut détecter "%" comme étant une tentative d'attaque "format string".
 - Il faut activer le bit NX. Si la pile n'avait pas été exécutable, le shellcode n'aurait pu fonctionner. La désactivation de la pile est rendue possible par la fonction *donxoff()* de *main.c*, il faudrait enlever cette option pour améliorer la sécurité.
-- Pour éviter le Buffer Overflow, il faut remplacer le "<=" en "<" dans la boucle "for" de la fonction sanitizeBuffer() ligne 55.
+- Pour éviter le buffer overflow, il faut remplacer le "<=" en "<" dans la boucle "for" de la fonction *sanitizeBuffer()*.
 
 # Conclusion
 
-Finalement, nous avons réussi à comprendre les étapes utilisées par l'attaquant et les vulnérabilités qu'il a exploitées. Nous avons également pu reproduire l'attaque et émettre des recommandations pour qu'une telle attaque ne soit plus possible à l'avenir.
-Nous espérons que la société Pressoare se remettra de cette attaque informatique et qu’elle pourra reprendre son activité sereinement.
+Finalement, nous avons réussi à comprendre les étapes utilisées par l'attaquant et les vulnérabilités qu'il a exploitées. Nous avons également pu reproduire l'attaque et émettre des recommandations pour qu'elle ne soit plus possible à l'avenir.
+Nous espérons que la société Pressoare se remettra de cette attaque informatique, qu’elle sera satisfaite de notre intervention et qu’elle pourra reprendre son activité sereinement.
