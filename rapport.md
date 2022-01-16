@@ -46,6 +46,9 @@ En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retou
 * calcul de strlen(unsafeBuffer), ici le résultat de ce calcul donne 200
 * copie caractère par caractère de *unsafeBuffer* dans *safeBuffer* de l’indice 0 à l’indice 201 ! (cf capture d’écran ci-dessous) Un caractère de trop a donc été copié et donc l’attaquant peut déborder de *safeBuffer*. Ce caractère copié en trop est forcément un 0 (car le \n a été remplacé précédemment par \0 et est copié dans la mémoire après *safeBuffer*.
 
+![faille_sanitizeBuffer](/images/faille_sanitizeBuffer.png)
+*extrait du code C de la fonction incriminée sanitizeBuffer*
+
 
 
 # Conclusion
