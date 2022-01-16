@@ -13,7 +13,7 @@ A l'aide de la commande *strings trace.pcap*, on repère rapidement du contenu a
 ![attaque](images/reseau_1.png)
 *hexdump d'une des attaques*
 
-On voit alors clairement les étapes suivi dans une de ses attaques. Il utilise tout d'abord la commande *ECHO %x% x%x%x %x* qui correspond à une attque "Format String" visant à afficher le haut de la pile. Le fait que cela ait abouti dans la trace réseau montre qu'il y a une première vulnérabilité dans le code qu'il faut approfondir (cf ci-dessous). Ensuite, l'attaquant utilise une payload qui lui permet d'obtenir un shell, d'où une deuxième vulnérabilité. L'attaquant liste ensuite
+On voit alors clairement les étapes suivi dans une de ses attaques. Il utilise tout d'abord la commande *ECHO %x% x%x%x %x* qui correspond à une attque "Format String" visant à afficher le haut de la pile. Le fait que cela ait abouti dans la trace réseau montre qu'il y a une première vulnérabilité dans le code qu'il faut approfondir (cf ci-dessous). Ensuite, l'attaquant utilise une payload qui lui permet d'obtenir un shell, d'où une deuxième vulnérabilité. L'attaquant liste ensuite les fichiers du dossier data et écrit 100 000 dans l'un d'eux : l'attaquant a ainsi modifié des données financières. Savoir quel client correspond au fichier A99883 permettrait de savoir à qui profite l'attaque et potentiellement permettre de retrouver l'identité du malfaiteur.
 
 ![attaque2](images/reseau_2.png)
 *Suite de l'attaque précédente*
@@ -47,6 +47,13 @@ Afin d’analyser la façon dont l’attaquant a réussi à ouvrir le shell, on 
 
 
 # Faille n° 1 : format string
+
+Il faut chercher à comprendre comment une attaque par "format string" a pu être possible à l'aide de la commande ECHO, et on dispose pour cela du code source en c. La fonction *DoEcho* du fichier *commande.c* utilise la fonction *snprintf()*, or il n'y a pas d'argument après la variable *echo*, donc lorsque l'attaquant rajoute "%x" après le "Echo", le serveur va l'interpréter comme un argument et renvoyer le haut de la pile.
+
+![Fonction DoEcho](images/do_echo.png)
+*Fonction DoEcho*
+
+Cette attaque n'est pas détectée par le serveur, malgré fonction *SanitizeBuffer()* qui génère une alerte lorsque des caractères non imprimables sont détectées. En effet, "%" est bien un caractère imprimable et l'attaque n'est pas détectée.
 
 
 # Faille n° 2 : buffer overflow
@@ -90,7 +97,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     milieu_ajout = adresse_4[-2:]
     charge_2 = charge_1+milieu_ajout
     fin_adresse = int(adresse[-2:], 16)- 4 # on convertit en decimal et on retranche 4
-    charge_3 = charge_2 + hex(fin_adresse)[2:] + adresse_4[2:-2][-2:] + adresse_4[2:-2][-4:-2] + adresse_4[2:-2][0:2] + "0a"
+
+    charge_3 = charge_2 + hex(fin_adresse)[2:] + adresse_4[2:-2][-2:] + adresse_4[2:-2][-4:-2]
+    charge_3 += adresse_4[2:-2][0:2] + "0a" # c'est du little endian
+
     charge_4 = binascii.unhexlify(charge_3) #on ajoute les "/x"
 
     s.sendall(charge_4)
@@ -103,6 +113,10 @@ Voici ce que donne le lancement de ce code sur la machine Analyste :
 
 ![attaque_reussie](images/attaque_reussie.png)
 *reproduction de l'attaque*
+
+# Recommandations pour le client
+
+
 
 # Conclusion
 
