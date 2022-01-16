@@ -10,7 +10,7 @@
 
 Grâce à la trace réseau, nous avons donc pu récupérer la payload utilisée par l’attaquant. 
 
-![test image]()
+![payload_hedump](/images/payload_hexdump.png)
 
 
 # Faille n° 1
