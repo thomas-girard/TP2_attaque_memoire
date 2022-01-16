@@ -70,7 +70,12 @@ En effet, si l’attaquant rentre exactement 200 caractères suivis d’un retou
 ![faille_sanitizeBuffer](images/faille_sanitizeBuffer.png)
 *extrait du code C de la fonction incriminée sanitizeBuffer*
 
-La question est donc à présent de savoir exactement où ce 0 *en trop* a été copié. Avec gdb, en utilisant notamment la commande : *print &variable*, on peut reconstituer l’état de la stack au moment du déroulement de cette boucle for. On obtient alors le résultat suivant :
+La question est donc à présent de savoir exactement où ce 0 *en trop* a été copié. Avec gdb, en utilisant notamment la commande : *print &variable*, on peut reconstituer l’état de la stack au moment du déroulement de cette boucle for.
+
+![info_frame](images/info_frame.png)
+*la commande info frame permet aussi d’avoir des indications utiles comme l’adresse de l’adresse de retour de la fonction (saved eip)*
+
+On obtient alors le résultat suivant :
 
 ![stack_sanitizeBuffer](images/buffer_illustration.jpg)
 *représentation de la stack lors de l’exécution de sanitizeBuffer*
@@ -81,7 +86,7 @@ On remarque donc que c’est l’octet de poids faible de i qui va être écras�
 
 Ensuite, c’est l’octet de valeur *8b* qui est écrit à la place de l’octet de poids faible de *\*dst*. Cette modification est tout sauf anodine. En effet, *\*dst* correspond à l’adresse en mémoire où la payload est recopiée (à cet instant, on peut d’ailleurs noter que la valeur de *\*dst* est égale à son adresse). Ainsi, en modifiant *\*dst*, l’attaquant peut choisir d’écrire là où il le souhaite dans la mémoire.\
 Il serait pertinent pour lui d’écrire à l’adresse de retour de la fonction sanitizeBuffer. En effet, en remplaçant cette adresse par un adresse dans le toboggan de NOP, cela lui permettrait de déplacer le fil d’exécution du serveur vers le code lui permettant d’obtenir un shell.\
-Pour
+Pour cela, l’attaquant doit connaître l’adresse de l’adresse de retour de la fonction sanitizeBuffer. Bien sûr, à cause de l’ASLR, cette adresse change tout le temps donc l’attaquant
 
 
 # Reproduction de l'attaque à l'aide d'un script
