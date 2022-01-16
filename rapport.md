@@ -6,7 +6,12 @@
 
 # Analyse Réseaux
 
-# Shellcode
+# Décomposition de la payload
+
+Grâce à la trace réseau, nous avons donc pu récupérer la payload utilisée par l’attaquant. 
+
+![test image]()
+
 
 # Faille n° 1
 
